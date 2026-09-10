@@ -24,8 +24,10 @@ function seasonalAlignment(sunsetAzimuth: number) {
 }
 
 export function solarForDate(date: Date) {
-  const noon = new Date(date);
-  noon.setUTCHours(20, 0, 0, 0);
+  // Anchor the calculation to Yosemite's calendar date, not the server/UTC date.
+  // This matters at sunset, when California's evening is already the next UTC day.
+  const localDate = zonedDateKey(date);
+  const noon = new Date(`${localDate}T20:00:00Z`);
   const times = SunCalc.getTimes(noon, HORSETAIL.lat, HORSETAIL.lon);
   const sunset = times.sunset;
   const sunsetPos = SunCalc.getPosition(sunset, HORSETAIL.lat, HORSETAIL.lon);

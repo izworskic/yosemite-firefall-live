@@ -19,13 +19,25 @@ export interface DayForecast {
   peakEnd?: string;
   sunset?: string;
   geometry: number;
+  terrainBased: boolean;
   cloudOpen: number | null;
-  cloudBasis: 'sun-corridor' | 'local-fallback' | 'unavailable';
+  cloudBasis: 'goes-nowcast' | 'sun-corridor' | 'local-fallback' | 'unavailable';
+  cloudTrend?: 'clearing' | 'clouding' | 'steady' | 'unknown';
   flowIndex: 'dry' | 'trickle' | 'light' | 'good' | 'strong' | 'unknown';
   flowScore: number | null;
   clarity: number | null;
   why: string;
   activeGeometry: boolean;
+}
+
+export interface TripWindow {
+  nights: number;
+  startDate: string;
+  endDate: string;
+  probability: number;
+  bestDate: string;
+  bestProbability: number;
+  method: 'gaussian-copula-correlated';
 }
 
 export interface FirefallSnapshot {
@@ -35,6 +47,7 @@ export interface FirefallSnapshot {
   headline: DayForecast | null;
   days: DayForecast[];
   bestDay: DayForecast | null;
+  tripWindows: TripWindow[];
   accessStatus: string;
   alerts: string[];
   sources: SourceState[];

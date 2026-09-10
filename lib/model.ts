@@ -1,17 +1,23 @@
 import { fetchCDEC } from './cdec';
 import { corridorCloudOpen, fetchWesternSunCorridor } from './corridor';
+import { fetchGOESNowcast, type GoesNowcast } from './goes';
 import { fetchNPSAlerts } from './nps';
 import { fetchNWS, valueNear } from './nws';
 import { solarForDate, localTime, zonedDateKey } from './solar';
+import { bestTripWindows } from './trip';
 import { fetchUSGS } from './usgs';
 import type { DayForecast, FirefallSnapshot } from './types';
 
 const clamp = (n: number, min = 0, max = 1) => Math.max(min, Math.min(max, n));
 const pct = (n: number) => Math.round(clamp(n) * 100);
 
+function localPart(now: Date, part: 'year'|'month'|'day') {
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', [part]: 'numeric' }).format(now));
+}
+
 function modeForDate(now: Date) {
-  const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'numeric' }).format(now));
-  const day = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', day: 'numeric' }).format(now));
+  const month = localPart(now, 'month');
+  const day = localPart(now, 'day');
   if (month === 2 && day >= 5 && day <= 28) return 'season' as const;
   if (month < 2 || month >= 8) return 'preseason' as const;
   return 'postseason' as const;
@@ -19,8 +25,8 @@ function modeForDate(now: Date) {
 
 function confidenceFor(geometry: number, available: number, sourcePenalty: number, cloudBasis: DayForecast['cloudBasis']) {
   if (geometry <= 0) return 'high' as const;
-  const corridorPenalty = cloudBasis === 'sun-corridor' ? 0 : cloudBasis === 'local-fallback' ? .7 : 1.5;
-  const score = available - sourcePenalty - corridorPenalty;
+  const cloudPenalty = cloudBasis === 'goes-nowcast' || cloudBasis === 'sun-corridor' ? 0 : cloudBasis === 'local-fallback' ? .7 : 1.5;
+  const score = available - sourcePenalty - cloudPenalty;
   return score >= 3 ? 'high' as const : score >= 2 ? 'moderate' as const : score >= 1 ? 'low' as const : 'unavailable' as const;
 }
 
@@ -48,6 +54,13 @@ function clarityModel(visibilityM: number | null, rh: number | null) {
   return clamp(.72 * vis + .28 * humidity);
 }
 
+function mergeNowcast(forecast: number | null, goes: GoesNowcast | null, hoursToPeak: number) {
+  if (!goes || goes.openness === null || hoursToPeak < -.5 || hoursToPeak > 6) return { value: forecast, used: false };
+  if (forecast === null) return { value: goes.openness, used: true };
+  const satelliteWeight = hoursToPeak <= 1.5 ? .72 : hoursToPeak <= 3 ? .52 : .30;
+  return { value: clamp(goes.openness * satelliteWeight + forecast * (1 - satelliteWeight)), used: true };
+}
+
 export function combineProbability(geometry: number, water: number | null, cloudOpen: number | null, clarity: number | null) {
   if (geometry <= 0) return 0;
   if (water === null || cloudOpen === null) return null;
@@ -56,10 +69,22 @@ export function combineProbability(geometry: number, water: number | null, cloud
 }
 
 export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallSnapshot> {
-  const [nws, corridor, cdec, usgs, nps] = await Promise.all([fetchNWS(), fetchWesternSunCorridor(), fetchCDEC(), fetchUSGS(), fetchNPSAlerts()]);
   const mode = modeForDate(now);
-  const year = now.getUTCFullYear() + (now.getUTCMonth() > 6 ? 1 : 0);
-  const start = mode === 'season' ? now : new Date(`${year}-02-10T20:00:00Z`);
+  const localYear = localPart(now, 'year');
+  const year = localYear + (localPart(now, 'month') > 6 ? 1 : 0);
+  let start = mode === 'season' ? now : new Date(`${year}-02-10T20:00:00Z`);
+  if (mode === 'season') {
+    const tonightSolar = solarForDate(start);
+    if (now.getTime() > tonightSolar.peakEnd.getTime() + 30 * 60_000) start = new Date(start.getTime() + 86400_000);
+  }
+  const firstSolar = solarForDate(start);
+  const hoursToFirstPeak = (firstSolar.peakStart.getTime() - now.getTime()) / 3600_000;
+  const shouldNowcast = mode === 'season' && hoursToFirstPeak >= -.5 && hoursToFirstPeak <= 6;
+
+  const [nws, corridor, cdec, usgs, nps, goes] = await Promise.all([
+    fetchNWS(), fetchWesternSunCorridor(), fetchCDEC(), fetchUSGS(), fetchNPSAlerts(),
+    shouldNowcast ? fetchGOESNowcast() : Promise.resolve(null)
+  ]);
   const days: DayForecast[] = [];
 
   for (let i = 0; i < 7; i++) {
@@ -68,8 +93,11 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     const p = nws.grid?.properties;
     const corridorOpen = corridorCloudOpen(corridor, solar.peakStart);
     const localOpen = localCloudOpen(valueNear(p?.skyCover, solar.peakStart));
-    const cloudOpen = corridorOpen ?? localOpen;
-    const cloudBasis: DayForecast['cloudBasis'] = corridorOpen !== null ? 'sun-corridor' : localOpen !== null ? 'local-fallback' : 'unavailable';
+    const forecastCloud = corridorOpen ?? localOpen;
+    const hoursToPeak = (solar.peakStart.getTime() - now.getTime()) / 3600_000;
+    const nowcast = i === 0 ? mergeNowcast(forecastCloud, goes, hoursToPeak) : { value: forecastCloud, used: false };
+    const cloudOpen = nowcast.value;
+    const cloudBasis: DayForecast['cloudBasis'] = nowcast.used ? 'goes-nowcast' : corridorOpen !== null ? 'sun-corridor' : localOpen !== null ? 'local-fallback' : 'unavailable';
     const temperature = valueNear(p?.temperature, new Date(solar.sunset.getTime() - 4 * 3600_000));
     const precip = valueNear(p?.quantitativePrecipitation, solar.sunset);
     const visibility = valueNear(p?.visibility, solar.peakStart);
@@ -79,8 +107,12 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     const probability = combineProbability(solar.geometry, flow.score, cloudOpen, clarity);
     const quality = probability === null ? null : pct(clamp(.52 * solar.geometry + .28 * (flow.score ?? 0) + .20 * (clarity ?? .7)));
     const available = [cloudOpen, flow.score, clarity].filter(v => v !== null).length;
-    const sourcePenalty = [nws.source, corridor.source, cdec.source, usgs.source].filter(s => s.freshness === 'stale' || s.freshness === 'unavailable').length * .25;
-    const skyPhrase = cloudOpen !== null ? `${pct(cloudOpen)}% modeled western sun-corridor openness` : 'western sun-corridor data unavailable';
+    let sourcePenalty = [nws.source, corridor.source, cdec.source, usgs.source].filter(s => s.freshness === 'stale' || s.freshness === 'unavailable').length * .25;
+    if (shouldNowcast && i === 0 && (!goes || goes.source.freshness === 'unavailable' || goes.source.freshness === 'stale')) sourcePenalty += .3;
+    const skyPhrase = cloudOpen === null
+      ? 'western sun-corridor data unavailable'
+      : nowcast.used && goes ? `${pct(cloudOpen)}% western sun corridor with GOES observation${goes.trend !== 'unknown' ? ` (${goes.trend})` : ''}`
+      : `${pct(cloudOpen)}% modeled western sun-corridor openness`;
     const whyParts = [
       solar.geometry > .8 ? 'excellent Firefall geometry' : solar.geometry > .35 ? 'usable Firefall geometry' : 'weak seasonal geometry',
       flow.index === 'good' || flow.index === 'strong' ? 'favorable runoff signal' : flow.index === 'unknown' ? 'uncertain runoff' : 'limited runoff signal',
@@ -93,7 +125,8 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
       quality,
       confidence: confidenceFor(solar.geometry, available, sourcePenalty, cloudBasis),
       peakStart: localTime(solar.peakStart), peakEnd: localTime(solar.peakEnd), sunset: localTime(solar.sunset),
-      geometry: pct(solar.geometry), cloudOpen: cloudOpen === null ? null : pct(cloudOpen), cloudBasis,
+      geometry: pct(solar.geometry), terrainBased: solar.terrainBased,
+      cloudOpen: cloudOpen === null ? null : pct(cloudOpen), cloudBasis, cloudTrend: nowcast.used && goes ? goes.trend : undefined,
       flowIndex: flow.index, flowScore: flow.score === null ? null : pct(flow.score), clarity: clarity === null ? null : pct(clarity),
       why: whyParts.join(' + '), activeGeometry: solar.geometry > .05
     });
@@ -101,12 +134,13 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
 
   const scored = days.filter(d => d.probability !== null);
   const bestDay = scored.length ? [...scored].sort((a, b) => (b.probability ?? -1) - (a.probability ?? -1))[0] : null;
+  const tripWindows = mode === 'season' ? bestTripWindows(days) : [];
   return {
-    mode, generatedAt: new Date().toISOString(), seasonYear: year, headline: mode === 'season' ? days[0] : null, days, bestDay,
+    mode, generatedAt: new Date().toISOString(), seasonYear: year, headline: mode === 'season' ? days[0] : null, days, bestDay, tripWindows,
     accessStatus: `${year} Firefall-specific access rules are not assumed from prior years. Verify current National Park Service guidance before travel.`,
     alerts: nps.alerts,
-    sources: [nws.source, corridor.source, cdec.source, usgs.source, nps.source],
-    methodologyVersion: '0.2.0-experimental-corridor',
+    sources: [nws.source, corridor.source, ...(goes ? [goes.source] : []), cdec.source, usgs.source, nps.source],
+    methodologyVersion: '0.3.0-experimental-goes-corridor',
     disclaimer: 'Independent experimental decision-support forecast. Not affiliated with or endorsed by the National Park Service.'
   };
 }
