@@ -69,12 +69,7 @@ function headerIndex(headers: string[], needle: string) {
   });
 }
 
-/**
- * Parse NOAA Clear Sky Mask point CSV.
- * BCM is the externally documented binary mask: 0 clear/probably clear, 1 cloudy/probably cloudy.
- * ACM is accepted only as a richer fallback when a provider exposes the four-level field.
- * DQF must be 0 (good quality) before the observation can affect the forecast.
- */
+/** Parse NOAA Clear Sky Mask point CSV. DQF must be 0 before a point may affect the forecast. */
 export function parseMaskCsv(csv: string): { openness: number | null; quality: number | null; mask: number | null; maskType: 'BCM' | 'ACM' | null } {
   const lines = csv.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return { openness: null, quality: null, mask: null, maskType: null };
@@ -108,7 +103,9 @@ async function fetchPoint(frame: GoesFrame, lat: number, lon: number) {
   params.append('var', 'DQF');
   params.set('latitude', lat.toFixed(5));
   params.set('longitude', lon.toFixed(5));
-  params.set('time', 'present');
+  // This NCSS deployment requires a concrete time value; "present" is rejected.
+  // Bind the point subset to the observation timestamp encoded in the selected file name.
+  params.set('time', frame.observedAt.toISOString());
   params.set('accept', 'csv');
   const url = `${NCSS_ROOT}${frame.urlPath}?${params.toString()}`;
   const res = await fetch(url, { next: { revalidate: 300 }, signal: AbortSignal.timeout(9000) });
