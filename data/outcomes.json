@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "minimumCalibrationSample": 30,
+  "definition": "outcome=1 only when a dated, independently verifiable observation shows visible orange/red Horsetail Fall illumination during the modeled event window; outcome=0 only when a reliable observer/source confirms the effect failed despite an attempted observation.",
+  "observations": []
+}
