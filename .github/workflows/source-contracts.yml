@@ -1,0 +1,28 @@
+name: Live source contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/nws.ts'
+      - 'lib/corridor.ts'
+      - 'lib/cdec.ts'
+      - 'lib/usgs.ts'
+      - 'scripts/probe-sources.ts'
+      - '.github/workflows/source-contracts.yml'
+  schedule:
+    - cron: '17 14 * * *'
+  workflow_dispatch:
+
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Probe critical live sources
+        run: npx tsx scripts/probe-sources.ts
