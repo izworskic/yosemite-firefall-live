@@ -1,0 +1,35 @@
+name: Build USGS terrain profile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/generate-terrain-profile.mjs'
+      - '.github/workflows/terrain-profile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  terrain:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/generate-terrain-profile.mjs
+      - name: Commit generated 3DEP profile
+        run: |
+          if git diff --quiet -- data/terrain-profile.json; then
+            echo 'Terrain profile unchanged.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/terrain-profile.json
+          git commit -m 'Generate USGS 3DEP terrain horizon profile'
+          git push
