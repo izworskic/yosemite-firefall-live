@@ -1,7 +1,143 @@
 {
-  "status": "unbuilt",
-  "generatedAt": null,
+  "status": "ready",
+  "generatedAt": "2026-09-10T19:44:27.611Z",
   "source": "USGS 3DEP Elevation Point Query Service",
-  "fallElevationM": null,
-  "profiles": []
+  "sourceUrl": "https://epqs.nationalmap.gov/v1/json",
+  "fall": {
+    "lat": 37.72912,
+    "lon": -119.62848
+  },
+  "fallElevationM": 1296.1,
+  "inputResolutionM": 1,
+  "bearings": [
+    246,
+    263
+  ],
+  "sampleDistancesKm": [
+    0.25,
+    0.5,
+    0.75,
+    1,
+    1.5,
+    2,
+    3,
+    4,
+    5,
+    7.5,
+    10,
+    15,
+    20,
+    30,
+    40
+  ],
+  "profiles": [
+    {
+      "bearing": 246,
+      "horizonElevationDeg": 4.1233,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1656.55
+    },
+    {
+      "bearing": 247,
+      "horizonElevationDeg": 3.469,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1599.2
+    },
+    {
+      "bearing": 248,
+      "horizonElevationDeg": 3.0398,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1561.62
+    },
+    {
+      "bearing": 249,
+      "horizonElevationDeg": 2.7965,
+      "obstructionDistanceKm": 7.5,
+      "obstructionElevationM": 1662.45
+    },
+    {
+      "bearing": 250,
+      "horizonElevationDeg": 2.4943,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1513.91
+    },
+    {
+      "bearing": 251,
+      "horizonElevationDeg": 2.3019,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1497.09
+    },
+    {
+      "bearing": 252,
+      "horizonElevationDeg": 2.1614,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1484.81
+    },
+    {
+      "bearing": 253,
+      "horizonElevationDeg": 1.9398,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1465.44
+    },
+    {
+      "bearing": 254,
+      "horizonElevationDeg": 1.4295,
+      "obstructionDistanceKm": 5,
+      "obstructionElevationM": 1420.87
+    },
+    {
+      "bearing": 255,
+      "horizonElevationDeg": 1.4159,
+      "obstructionDistanceKm": 7.5,
+      "obstructionElevationM": 1481.48
+    },
+    {
+      "bearing": 256,
+      "horizonElevationDeg": 1.9422,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1397.84
+    },
+    {
+      "bearing": 257,
+      "horizonElevationDeg": 2.6433,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1434.6
+    },
+    {
+      "bearing": 258,
+      "horizonElevationDeg": 3.4019,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1474.43
+    },
+    {
+      "bearing": 259,
+      "horizonElevationDeg": 4.1291,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1512.68
+    },
+    {
+      "bearing": 260,
+      "horizonElevationDeg": 5.6117,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1590.88
+    },
+    {
+      "bearing": 261,
+      "horizonElevationDeg": 7.8011,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1707.11
+    },
+    {
+      "bearing": 262,
+      "horizonElevationDeg": 8.537,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1746.44
+    },
+    {
+      "bearing": 263,
+      "horizonElevationDeg": 8.9637,
+      "obstructionDistanceKm": 3,
+      "obstructionElevationM": 1769.31
+    }
+  ]
 }
