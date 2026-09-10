@@ -10,6 +10,7 @@ import type { DayForecast, FirefallSnapshot } from './types';
 
 const clamp = (n: number, min = 0, max = 1) => Math.max(min, Math.min(max, n));
 const pct = (n: number) => Math.round(clamp(n) * 100);
+const ARRIVAL_BUFFER_MINUTES = 120;
 
 function localPart(now: Date, part: 'year'|'month'|'day') {
   return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', [part]: 'numeric' }).format(now));
@@ -45,7 +46,6 @@ export function flowModel(
 
   const snowAvailability = swe === null ? null : clamp((swe - 0.25) / 12);
   const thermalMelt = temperatureC === null ? 0.35 : clamp((temperatureC + 2) / 10);
-  // Falling SWE is useful corroboration that stored snow is actively releasing water.
   const observedMelt = sweTrend3Day === null ? 0 : clamp(-sweTrend3Day / 1.5);
   const rainSource = precipMm === null ? 0 : clamp(precipMm / 12);
 
@@ -124,6 +124,7 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     const clarity = clarityModel(visibility, rh);
     const flow = flowModel(cdec.sweInches, cdec.trend, temperature, precip, usgs.dischargeCfs);
     const probability = combineProbability(solar.geometry, flow.score, cloudOpen, clarity);
+    const probabilityPct = probability === null ? null : pct(probability);
     const quality = probability === null ? null : pct(clamp(.52 * solar.geometry + .28 * (flow.score ?? 0) + .20 * (clarity ?? .7)));
     const available = [cloudOpen, flow.score, clarity].filter(v => v !== null).length;
     let sourcePenalty = [nws.source, corridor.source, cdec.source, usgs.source].filter(s => s.freshness === 'stale' || s.freshness === 'unavailable').length * .25;
@@ -137,13 +138,15 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
       flow.index === 'good' || flow.index === 'strong' ? 'favorable runoff signal' : flow.index === 'unknown' ? 'uncertain runoff' : 'limited runoff signal',
       skyPhrase
     ];
+    const arrivalTarget = new Date(solar.peakStart.getTime() - ARRIVAL_BUFFER_MINUTES * 60_000);
     days.push({
       date: zonedDateKey(date),
       label: new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short' }).format(date),
-      probability: mode === 'season' ? (probability === null ? null : pct(probability)) : null,
+      probability: mode === 'season' ? probabilityPct : null,
       quality,
       confidence: confidenceFor(solar.geometry, available, sourcePenalty, cloudBasis),
       peakStart: localTime(solar.peakStart), peakEnd: localTime(solar.peakEnd), sunset: localTime(solar.sunset),
+      arrivalBy: localTime(arrivalTarget), arrivalBufferMinutes: ARRIVAL_BUFFER_MINUTES,
       geometry: pct(solar.geometry), terrainBased: solar.terrainBased,
       cloudOpen: cloudOpen === null ? null : pct(cloudOpen), cloudBasis, cloudTrend: nowcast.used && goes ? goes.trend : undefined,
       flowIndex: flow.index, flowScore: flow.score === null ? null : pct(flow.score), clarity: clarity === null ? null : pct(clarity),
@@ -159,7 +162,7 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     accessStatus: `${year} Firefall-specific access rules are not assumed from prior years. Verify current National Park Service guidance before travel.`,
     alerts: nps.alerts,
     sources: [nws.source, corridor.source, ...(goes ? [goes.source] : []), cdec.source, usgs.source, nps.source],
-    methodologyVersion: '0.4.0-experimental-source-gated-water',
+    methodologyVersion: '0.5.0-experimental-decision-engine',
     disclaimer: 'Independent experimental decision-support forecast. Not affiliated with or endorsed by the National Park Service.'
   };
 }
