@@ -9,8 +9,14 @@ test('parses and chronologically sorts GOES CloudMask catalog paths', () => {
   assert.ok(frames[1].observedAt.getTime() > frames[0].observedAt.getTime());
 });
 
-test('maps NOAA four-level ACM mask into openness and honors DQF', () => {
+test('maps NOAA external binary BCM mask into openness and honors DQF', () => {
+  assert.equal(parseMaskCsv('time,BCM,DQF\n2026-01-01T00:00Z,0,0').openness, 1);
+  assert.equal(parseMaskCsv('time,BCM,DQF\n2026-01-01T00:00Z,1,0').openness, 0);
+  assert.equal(parseMaskCsv('time,BCM,DQF\n2026-01-01T00:00Z,0,1').openness, null);
+});
+
+test('accepts richer ACM field only as a compatible fallback', () => {
   assert.equal(parseMaskCsv('time,ACM,DQF\n2026-01-01T00:00Z,0,0').openness, 1);
   assert.equal(parseMaskCsv('time,ACM,DQF\n2026-01-01T00:00Z,3,0').openness, 0);
-  assert.equal(parseMaskCsv('time,ACM,DQF\n2026-01-01T00:00Z,0,1').openness, null);
+  assert.equal(parseMaskCsv('time,ACM,DQF\n2026-01-01T00:00Z,1,0').openness, 0.72);
 });
