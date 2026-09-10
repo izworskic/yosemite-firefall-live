@@ -60,11 +60,19 @@ function splitCsvLine(line: string) {
   return out;
 }
 
+function normalizeHeader(header: string) {
+  return header
+    .replace(/^"|"$/g, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\([^)]*\)/g, '')
+    .trim()
+    .toUpperCase();
+}
+
 function headerIndex(headers: string[], needle: string) {
   const upperNeedle = needle.toUpperCase();
   return headers.findIndex(header => {
-    const normalized = header.replace(/^"|"$/g, '').trim();
-    const upper = normalized.toUpperCase();
+    const upper = normalizeHeader(header);
     return upper === upperNeedle || upper.endsWith(`.${upperNeedle}`) || upper.endsWith(`_${upperNeedle}`);
   });
 }
@@ -112,8 +120,12 @@ async function fetchPoint(frame: GoesFrame, lat: number, lon: number) {
     const body = (await res.text()).replace(/\s+/g, ' ').slice(0, 220);
     throw new Error(`GOES NCSS ${res.status}${body ? `: ${body}` : ''}`);
   }
-  const parsed = parseMaskCsv(await res.text());
-  if (parsed.openness === null) throw new Error('GOES NCSS returned no valid BCM/DQF point value');
+  const csv = await res.text();
+  const parsed = parseMaskCsv(csv);
+  if (parsed.openness === null) {
+    const preview = csv.split(/\r?\n/).filter(Boolean).slice(0, 3).join(' | ').replace(/\s+/g, ' ').slice(0, 360);
+    throw new Error(`GOES NCSS returned no valid BCM/DQF point value · ${preview}`);
+  }
   return parsed;
 }
 
