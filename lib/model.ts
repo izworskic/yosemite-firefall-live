@@ -30,14 +30,33 @@ function confidenceFor(geometry: number, available: number, sourcePenalty: numbe
   return score >= 3 ? 'high' as const : score >= 2 ? 'moderate' as const : score >= 1 ? 'low' as const : 'unavailable' as const;
 }
 
-function flowModel(swe: number | null, temperatureC: number | null, precipMm: number | null, mercedCfs: number | null) {
-  if (swe === null && temperatureC === null && precipMm === null) return { score: null, index: 'unknown' as const };
-  const snow = swe === null ? 0.38 : clamp(swe / 18);
-  const melt = temperatureC === null ? 0.35 : clamp((temperatureC - 0.5) / 8);
-  const rain = precipMm === null ? 0 : clamp(precipMm / 15);
-  const basin = mercedCfs === null ? 0.35 : clamp(Math.log10(Math.max(1, mercedCfs)) / 3);
-  const score = clamp(0.46 * snow + 0.29 * melt + 0.17 * rain + 0.08 * basin);
-  const index = score < .16 ? 'dry' : score < .30 ? 'trickle' : score < .48 ? 'light' : score < .76 ? 'good' : 'strong';
+/**
+ * Conservative Horsetail runoff proxy. Merced discharge can only corroborate
+ * source water; it cannot manufacture a favorable Horsetail signal by itself.
+ */
+export function flowModel(
+  swe: number | null,
+  sweTrend3Day: number | null,
+  temperatureC: number | null,
+  precipMm: number | null,
+  mercedCfs: number | null
+) {
+  if (swe === null && precipMm === null) return { score: null, index: 'unknown' as const };
+
+  const snowAvailability = swe === null ? null : clamp((swe - 0.25) / 12);
+  const thermalMelt = temperatureC === null ? 0.35 : clamp((temperatureC + 2) / 10);
+  // Falling SWE is useful corroboration that stored snow is actively releasing water.
+  const observedMelt = sweTrend3Day === null ? 0 : clamp(-sweTrend3Day / 1.5);
+  const rainSource = precipMm === null ? 0 : clamp(precipMm / 12);
+
+  const snowRunoff = snowAvailability === null
+    ? 0
+    : snowAvailability * (0.25 + 0.55 * thermalMelt + 0.20 * observedMelt);
+  const sourceWater = Math.max(snowRunoff, 0.90 * rainSource);
+
+  const basin = mercedCfs === null ? 0.5 : clamp((Math.log10(Math.max(1, mercedCfs)) - 1.4) / 1.5);
+  const score = clamp(sourceWater * (0.88 + 0.12 * basin));
+  const index = score < .12 ? 'dry' : score < .26 ? 'trickle' : score < .43 ? 'light' : score < .72 ? 'good' : 'strong';
   return { score, index } as const;
 }
 
@@ -103,7 +122,7 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     const visibility = valueNear(p?.visibility, solar.peakStart);
     const rh = valueNear(p?.relativeHumidity, solar.peakStart);
     const clarity = clarityModel(visibility, rh);
-    const flow = flowModel(cdec.sweInches, temperature, precip, usgs.dischargeCfs);
+    const flow = flowModel(cdec.sweInches, cdec.trend, temperature, precip, usgs.dischargeCfs);
     const probability = combineProbability(solar.geometry, flow.score, cloudOpen, clarity);
     const quality = probability === null ? null : pct(clamp(.52 * solar.geometry + .28 * (flow.score ?? 0) + .20 * (clarity ?? .7)));
     const available = [cloudOpen, flow.score, clarity].filter(v => v !== null).length;
@@ -140,7 +159,7 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     accessStatus: `${year} Firefall-specific access rules are not assumed from prior years. Verify current National Park Service guidance before travel.`,
     alerts: nps.alerts,
     sources: [nws.source, corridor.source, ...(goes ? [goes.source] : []), cdec.source, usgs.source, nps.source],
-    methodologyVersion: '0.3.0-experimental-goes-corridor',
+    methodologyVersion: '0.4.0-experimental-source-gated-water',
     disclaimer: 'Independent experimental decision-support forecast. Not affiliated with or endorsed by the National Park Service.'
   };
 }
