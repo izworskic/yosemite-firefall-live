@@ -18,6 +18,8 @@ export interface DayForecast {
   peakStart?: string;
   peakEnd?: string;
   sunset?: string;
+  arrivalBy?: string;
+  arrivalBufferMinutes?: number;
   geometry: number;
   terrainBased: boolean;
   cloudOpen: number | null;
