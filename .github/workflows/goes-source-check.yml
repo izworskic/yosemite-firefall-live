@@ -1,0 +1,24 @@
+name: GOES-18 source contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/goes.ts'
+      - 'scripts/probe-goes.ts'
+      - '.github/workflows/goes-source-check.yml'
+  schedule:
+    - cron: '17 * * 2 *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx tsx scripts/probe-goes.ts
