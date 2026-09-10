@@ -1,8 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import type { DayForecast, FirefallSnapshot } from '@/lib/types';
-import FirefallMap from './FirefallMap';
+
+const FirefallMap = dynamic(() => import('./FirefallMap'), {
+  ssr: false,
+  loading: () => <section className="section map-section"><div className="map-wrap" aria-busy="true"/></section>
+});
 
 function chanceLabel(value: number | null) {
   if (value === null) return 'FORECAST PENDING';
@@ -74,6 +79,7 @@ export default function FirefallDashboard({ snapshot }: { snapshot: FirefallSnap
         <h1 id="hero-title">{headlineTitle}</h1>
         <div className="probability-row"><strong>{selected.probability === null ? '—' : `${selected.probability}%`}</strong><div><span className="chance">{chanceLabel(selected.probability)}</span><span className="confidence">Confidence: {selected.confidence}</span></div></div>
         <div className="peak-card"><span>PEAK GLOW</span><b>{selected.peakStart}–{selected.peakEnd}</b><small>Sunset {selected.sunset}</small></div>
+        <div className="peak-card arrival-plan"><span>ARRIVAL PLANNING TARGET</span><b>{selected.arrivalBy ? `Be parked and moving toward the viewing area by ${selected.arrivalBy}` : 'Verify access before travel'}</b><small>{selected.arrivalBufferMinutes ? `${selected.arrivalBufferMinutes} minutes before modeled peak · planning heuristic, not an NPS rule` : 'Follow current NPS traffic and parking instructions'}</small></div>
         <p className="why"><b>Why:</b> {selected.why}.</p>
         <div className="metric-grid">
           <Metric label="Horsetail flow" value={flowLabel(selected.flowIndex)} detail={selected.flowScore === null ? 'model uncertain' : `${selected.flowScore}/100 runoff signal`}/>
