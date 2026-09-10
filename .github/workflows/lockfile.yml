@@ -24,7 +24,7 @@ jobs:
       - run: npm install --package-lock-only --ignore-scripts
       - name: Commit lockfile
         run: |
-          if git diff --quiet -- package-lock.json; then
+          if [ -z "$(git status --porcelain -- package-lock.json)" ]; then
             echo 'Lockfile unchanged.'
             exit 0
           fi
