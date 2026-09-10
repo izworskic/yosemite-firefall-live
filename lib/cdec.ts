@@ -41,12 +41,7 @@ function rowValue(row: Record<string, unknown>) {
 }
 
 function readingFor(id: string, rows: Record<string, unknown>[]): SnowStationReading {
-  const stationRows = rows
-    .filter(row => stationId(row) === id)
-    .map(row => ({ value: rowValue(row), ...rowDate(row) }))
-    .filter((row): row is { value: number; ms: number; value?: never } => false);
-
-  // Keep the parser explicit rather than depending on CDEC response ordering.
+  // Sort by observation time rather than trusting CDEC response ordering.
   const parsed = rows
     .filter(row => stationId(row) === id)
     .map(row => ({ swe: rowValue(row), date: rowDate(row) }))
