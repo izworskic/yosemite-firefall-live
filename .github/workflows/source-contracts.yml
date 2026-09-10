@@ -23,6 +23,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - name: Probe critical live sources
         run: npx tsx scripts/probe-sources.ts
+      - name: Production dependency audit
+        run: npm run audit:prod
