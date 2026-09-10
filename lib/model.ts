@@ -1,4 +1,5 @@
 import { fetchCDEC } from './cdec';
+import { corridorCloudOpen, fetchWesternSunCorridor } from './corridor';
 import { fetchNPSAlerts } from './nps';
 import { fetchNWS, valueNear } from './nws';
 import { solarForDate, localTime, zonedDateKey } from './solar';
@@ -16,9 +17,10 @@ function modeForDate(now: Date) {
   return 'postseason' as const;
 }
 
-function confidenceFor(geometry: number, available: number, sourcePenalty: number) {
+function confidenceFor(geometry: number, available: number, sourcePenalty: number, cloudBasis: DayForecast['cloudBasis']) {
   if (geometry <= 0) return 'high' as const;
-  const score = available - sourcePenalty;
+  const corridorPenalty = cloudBasis === 'sun-corridor' ? 0 : cloudBasis === 'local-fallback' ? .7 : 1.5;
+  const score = available - sourcePenalty - corridorPenalty;
   return score >= 3 ? 'high' as const : score >= 2 ? 'moderate' as const : score >= 1 ? 'low' as const : 'unavailable' as const;
 }
 
@@ -33,9 +35,8 @@ function flowModel(swe: number | null, temperatureC: number | null, precipMm: nu
   return { score, index } as const;
 }
 
-function cloudModel(skyCover: number | null) {
+function localCloudOpen(skyCover: number | null) {
   if (skyCover === null) return null;
-  // Conservative: opaque western cloud is disproportionately damaging.
   const c = clamp(skyCover / 100);
   return clamp(1 - Math.pow(c, 1.35));
 }
@@ -51,12 +52,11 @@ export function combineProbability(geometry: number, water: number | null, cloud
   if (geometry <= 0) return 0;
   if (water === null || cloudOpen === null) return null;
   const clear = clarity ?? .78;
-  // Conjunctive model. Geometry and severe cloud/water failures cannot be compensated away.
   return clamp(Math.pow(geometry, 0.8) * Math.pow(water, 0.9) * Math.pow(cloudOpen, 1.15) * Math.pow(clear, 0.35));
 }
 
 export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallSnapshot> {
-  const [nws, cdec, usgs, nps] = await Promise.all([fetchNWS(), fetchCDEC(), fetchUSGS(), fetchNPSAlerts()]);
+  const [nws, corridor, cdec, usgs, nps] = await Promise.all([fetchNWS(), fetchWesternSunCorridor(), fetchCDEC(), fetchUSGS(), fetchNPSAlerts()]);
   const mode = modeForDate(now);
   const year = now.getUTCFullYear() + (now.getUTCMonth() > 6 ? 1 : 0);
   const start = mode === 'season' ? now : new Date(`${year}-02-10T20:00:00Z`);
@@ -66,32 +66,35 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     const date = new Date(start.getTime() + i * 86400_000);
     const solar = solarForDate(date);
     const p = nws.grid?.properties;
-    const sky = valueNear(p?.skyCover, solar.peakStart);
+    const corridorOpen = corridorCloudOpen(corridor, solar.peakStart);
+    const localOpen = localCloudOpen(valueNear(p?.skyCover, solar.peakStart));
+    const cloudOpen = corridorOpen ?? localOpen;
+    const cloudBasis: DayForecast['cloudBasis'] = corridorOpen !== null ? 'sun-corridor' : localOpen !== null ? 'local-fallback' : 'unavailable';
     const temperature = valueNear(p?.temperature, new Date(solar.sunset.getTime() - 4 * 3600_000));
     const precip = valueNear(p?.quantitativePrecipitation, solar.sunset);
     const visibility = valueNear(p?.visibility, solar.peakStart);
     const rh = valueNear(p?.relativeHumidity, solar.peakStart);
-    const cloudOpen = cloudModel(sky);
     const clarity = clarityModel(visibility, rh);
     const flow = flowModel(cdec.sweInches, temperature, precip, usgs.dischargeCfs);
     const probability = combineProbability(solar.geometry, flow.score, cloudOpen, clarity);
     const quality = probability === null ? null : pct(clamp(.52 * solar.geometry + .28 * (flow.score ?? 0) + .20 * (clarity ?? .7)));
     const available = [cloudOpen, flow.score, clarity].filter(v => v !== null).length;
-    const sourcePenalty = [nws.source, cdec.source, usgs.source].filter(s => s.freshness === 'stale' || s.freshness === 'unavailable').length * .35;
+    const sourcePenalty = [nws.source, corridor.source, cdec.source, usgs.source].filter(s => s.freshness === 'stale' || s.freshness === 'unavailable').length * .25;
+    const skyPhrase = cloudOpen !== null ? `${pct(cloudOpen)}% modeled western sun-corridor openness` : 'western sun-corridor data unavailable';
     const whyParts = [
       solar.geometry > .8 ? 'excellent Firefall geometry' : solar.geometry > .35 ? 'usable Firefall geometry' : 'weak seasonal geometry',
       flow.index === 'good' || flow.index === 'strong' ? 'favorable runoff signal' : flow.index === 'unknown' ? 'uncertain runoff' : 'limited runoff signal',
-      cloudOpen !== null ? `${pct(cloudOpen)}% modeled sky openness` : 'cloud data unavailable'
+      skyPhrase
     ];
     days.push({
       date: zonedDateKey(date),
       label: new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short' }).format(date),
       probability: mode === 'season' ? (probability === null ? null : pct(probability)) : null,
       quality,
-      confidence: confidenceFor(solar.geometry, available, sourcePenalty),
+      confidence: confidenceFor(solar.geometry, available, sourcePenalty, cloudBasis),
       peakStart: localTime(solar.peakStart), peakEnd: localTime(solar.peakEnd), sunset: localTime(solar.sunset),
-      geometry: pct(solar.geometry), cloudOpen: cloudOpen === null ? null : pct(cloudOpen), flowIndex: flow.index,
-      flowScore: flow.score === null ? null : pct(flow.score), clarity: clarity === null ? null : pct(clarity),
+      geometry: pct(solar.geometry), cloudOpen: cloudOpen === null ? null : pct(cloudOpen), cloudBasis,
+      flowIndex: flow.index, flowScore: flow.score === null ? null : pct(flow.score), clarity: clarity === null ? null : pct(clarity),
       why: whyParts.join(' + '), activeGeometry: solar.geometry > .05
     });
   }
@@ -102,8 +105,8 @@ export async function buildFirefallSnapshot(now = new Date()): Promise<FirefallS
     mode, generatedAt: new Date().toISOString(), seasonYear: year, headline: mode === 'season' ? days[0] : null, days, bestDay,
     accessStatus: `${year} Firefall-specific access rules are not assumed from prior years. Verify current National Park Service guidance before travel.`,
     alerts: nps.alerts,
-    sources: [nws.source, cdec.source, usgs.source, nps.source],
-    methodologyVersion: '0.1.0-experimental',
+    sources: [nws.source, corridor.source, cdec.source, usgs.source, nps.source],
+    methodologyVersion: '0.2.0-experimental-corridor',
     disclaimer: 'Independent experimental decision-support forecast. Not affiliated with or endorsed by the National Park Service.'
   };
 }

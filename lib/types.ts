@@ -20,6 +20,7 @@ export interface DayForecast {
   sunset?: string;
   geometry: number;
   cloudOpen: number | null;
+  cloudBasis: 'sun-corridor' | 'local-fallback' | 'unavailable';
   flowIndex: 'dry' | 'trickle' | 'light' | 'good' | 'strong' | 'unknown';
   flowScore: number | null;
   clarity: number | null;
