@@ -42,10 +42,13 @@ function rowValue(row: Record<string, unknown>) {
 
 function readingFor(id: string, rows: Record<string, unknown>[]): SnowStationReading {
   // Sort by observation time rather than trusting CDEC response ordering.
-  const parsed = rows
+  const parsed: Array<{ swe: number; date: { value: string | undefined; ms: number } }> = rows
     .filter(row => stationId(row) === id)
-    .map(row => ({ swe: rowValue(row), date: rowDate(row) }))
-    .filter((row): row is { swe: number; date: { value?: string; ms: number } } => row.swe !== null && row.swe >= 0)
+    .flatMap(row => {
+      const swe = rowValue(row);
+      if (swe === null || swe < 0) return [];
+      return [{ swe, date: rowDate(row) }];
+    })
     .sort((a, b) => a.date.ms - b.date.ms);
 
   if (!parsed.length) return { id, sweInches: null, trend3DayInches: null };
