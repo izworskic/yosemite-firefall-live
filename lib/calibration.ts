@@ -41,10 +41,10 @@ export function computeCalibration(observations: VerifiedOutcome[], minimumSampl
 
   const probs = valid.map(o => clampProbability(o.probability));
   const outcomes = valid.map(o => o.outcome);
-  const brierScore = probs.reduce((sum, p, i) => sum + (p - outcomes[i]) ** 2, 0) / n;
-  const logLoss = probs.reduce((sum, p, i) => sum - (outcomes[i] * Math.log(p) + (1 - outcomes[i]) * Math.log(1 - p)), 0) / n;
-  const baseRate = outcomes.reduce((a, b) => a + b, 0) / n;
-  const climatologyBrier = outcomes.reduce((sum, y) => sum + (baseRate - y) ** 2, 0) / n;
+  const brierScore = probs.reduce<number>((sum, p, i) => sum + (p - outcomes[i]) ** 2, 0) / n;
+  const logLoss = probs.reduce<number>((sum, p, i) => sum - (outcomes[i] * Math.log(p) + (1 - outcomes[i]) * Math.log(1 - p)), 0) / n;
+  const baseRate = outcomes.reduce<number>((a, b) => a + b, 0) / n;
+  const climatologyBrier = outcomes.reduce<number>((sum, y) => sum + (baseRate - y) ** 2, 0) / n;
   const brierSkillScore = climatologyBrier > 0 ? 1 - brierScore / climatologyBrier : null;
 
   let ece = 0;
@@ -53,7 +53,7 @@ export function computeCalibration(observations: VerifiedOutcome[], minimumSampl
     const indices = probs.map((p, i) => ({ p, i })).filter(x => x.p >= lower && (upper >= 1 ? x.p <= upper : x.p < upper));
     if (!indices.length) continue;
     const meanP = indices.reduce((s, x) => s + x.p, 0) / indices.length;
-    const meanY = indices.reduce((s, x) => s + outcomes[x.i], 0) / indices.length;
+    const meanY = indices.reduce<number>((s, x) => s + outcomes[x.i], 0) / indices.length;
     ece += (indices.length / n) * Math.abs(meanP - meanY);
   }
 
