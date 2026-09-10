@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import maplibregl from 'maplibre-gl';
+import { Map, Marker, NavigationControl, Popup } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const points = [
@@ -14,14 +14,14 @@ export default function FirefallMap() {
   const node = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!node.current) return;
-    const map = new maplibregl.Map({ container: node.current, style: 'https://tiles.openfreemap.org/styles/liberty', center: [-119.621, 37.728], zoom: 13.25, attributionControl: {} });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
+    const map = new Map({ container: node.current, style: 'https://tiles.openfreemap.org/styles/liberty', center: [-119.621, 37.728], zoom: 13.25, attributionControl: {} });
+    map.addControl(new NavigationControl({ showCompass: true }), 'top-right');
     points.forEach(p => {
       const el = document.createElement('button');
       el.className = 'map-marker';
       el.type = 'button';
       el.setAttribute('aria-label', p.name);
-      new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).setPopup(new maplibregl.Popup({ offset: 18 }).setText(p.name)).addTo(map);
+      new Marker({ element: el }).setLngLat([p.lon, p.lat]).setPopup(new Popup({ offset: 18 }).setText(p.name)).addTo(map);
     });
     return () => map.remove();
   }, []);
