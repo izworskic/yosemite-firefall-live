@@ -6,11 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "node --test tests/*.test.mjs"
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@turf/helpers": "^7.2.0",
     "maplibre-gl": "^5.7.1",
     "next": "^15.5.2",
     "react": "^19.1.1",
@@ -22,6 +21,7 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@types/suncalc": "^1.9.2",
+    "tsx": "^4.20.5",
     "typescript": "^5.8.3"
   }
 }
