@@ -20,9 +20,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - name: Probe live GOES-18 point-subset contract
         run: npx tsx scripts/probe-goes.ts
-      - name: Report production dependency audit
-        if: always()
-        run: npm audit --omit=dev || true
+      - name: Production dependency audit
+        run: npm run audit:prod
