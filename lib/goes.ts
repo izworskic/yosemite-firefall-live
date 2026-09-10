@@ -103,9 +103,8 @@ async function fetchPoint(frame: GoesFrame, lat: number, lon: number) {
   params.append('var', 'DQF');
   params.set('latitude', lat.toFixed(5));
   params.set('longitude', lon.toFixed(5));
-  // This NCSS deployment requires a concrete time value; "present" is rejected.
-  // Bind the point subset to the observation timestamp encoded in the selected file name.
-  params.set('time', frame.observedAt.toISOString());
+  // Each CloudMask file is a single observation. Omitting time lets NCSS select
+  // that file's native scan time, which differs slightly from the filename start time.
   params.set('accept', 'csv');
   const url = `${NCSS_ROOT}${frame.urlPath}?${params.toString()}`;
   const res = await fetch(url, { next: { revalidate: 300 }, signal: AbortSignal.timeout(9000) });
