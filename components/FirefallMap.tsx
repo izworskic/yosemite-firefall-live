@@ -14,7 +14,7 @@ export default function FirefallMap() {
   const node = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!node.current) return;
-    const map = new maplibregl.Map({ container: node.current, style: 'https://tiles.openfreemap.org/styles/liberty', center: [-119.621, 37.728], zoom: 13.25, attributionControl: true });
+    const map = new maplibregl.Map({ container: node.current, style: 'https://tiles.openfreemap.org/styles/liberty', center: [-119.621, 37.728], zoom: 13.25, attributionControl: {} });
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
     points.forEach(p => {
       const el = document.createElement('button');
