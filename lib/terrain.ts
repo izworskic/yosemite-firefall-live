@@ -1,4 +1,4 @@
-import terrainRaw from '@/data/terrain-profile.json';
+import terrainRaw from '../data/terrain-profile.json';
 
 type TerrainPoint = { bearing: number; horizonElevationDeg: number; obstructionDistanceKm: number; obstructionElevationM: number };
 type TerrainFile = { status: string; generatedAt: string | null; source: string; fallElevationM: number | null; profiles: TerrainPoint[]; targetElevationValidated?: boolean };
