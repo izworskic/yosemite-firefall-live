@@ -3,6 +3,7 @@ import { currentCalibration } from '@/lib/calibration';
 import { SITE } from '@/lib/config';
 import { buildFirefallSnapshot } from '@/lib/model';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 900;
 
 const faqs = [
